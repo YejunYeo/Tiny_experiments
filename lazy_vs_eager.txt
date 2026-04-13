@@ -1,0 +1,79 @@
+
+Lazy Operations:
+- Records pending operations
+
+For Example:
+
+```
+a = Tensor.empty(4, 4)
+b = Tensor.empty(4, 4)
+```
+
+print (a+b)
+
+Would give us:
+
+```
+<Tensor <UOp METAL (4, 4) float (<Ops.ADD: 44>, None)> on METAL with grad None>
+```
+
+So only the operation would be recorded
+
+This allows efficient memory computations:
+
+For example:
+
+
+a = Tensor.empty(4, 4)
+b = Tensor.empty(4, 4)
+c = a+b
+d = a * b
+
+print(d.tolist()) # you only ever use d
+
+Then we never actually compute c because we never use it, saving us memory.
+
+This is just one of the ways where storing operations by just pending operations leads to efficiency.
+
+For example, 
+
+when we have (a+b) - b, in an eager execution (opposite of lazy):
+
+1. a+b is comptued and stored as a new tensor in a fresh chunk of memory (call it tmp)
+2. tmp - b is computed then stored in in ==another==  fresh chunk of memory.
+
+You might ask why do we store the tmp-b value in "another" chunk of memory? It's how eager execution works. A.K.A it's just how Python's built-in add function is designed. If we do
+d = (a + b) + c,
+The python program looks at a, stored at a unique memory address
+The python program looks at b, stored at a unique memory address
+Then it stores (a+b) in a completely new memory address (say tmp)
+
+Then,
+The python program looks at tmp, stored at a unique memory address
+The python program looks at c, stored at a unique memory address
+Then it stores (a+b) + c  in a completely new memory address (res)
+
+It would be much more memory efficient if we stored res at the location of temp right? However this cannot be fixed.
+
+This is a fundamental limit of eager execution:
+Each operation is self-contained, meaning it does it job in isolation, so it cannot optimize for memory allocation by looking at the whole code and going " when I add tmp with c, since I am allocating the computed value to a completely new variable, I can just store res in the memory address of tmp". The language (python) has decided to return an output and save it to new memory address for each inner expression. 
+
+
+PyTorch allows something like `x.add_(y)` (the underscore means in-place) which opts out of this inefficient memory allocation.
+
+TLDR: Python's deafult add function is memory inefficient
+
+
+Vs in lazy execution of Tinygrad.
+
+Say we have (a+b) - b,
+
+1. (a+b)  is recorded as "pedning: a add b"  and -b is recorded as "subtract- b from previous pending thing"
+2. Then if the recording is forced to producce a value such as .tolist(), the tinygrad framework looks at the whole recording and optimizes the operations.
+
+
+
+
+
+
+
